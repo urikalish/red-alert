@@ -34,7 +34,7 @@ function loadEnvVars() {
     }
 }
 
-function readDataObjectFromFile(dirPath, fileName) {
+function readDataObjectFromFile(dirPath, fileName, noFileSefault) {
     let dataObject = null;
     const fullFilePath = `${dirPath}/${fileName}`;
     try {
@@ -42,6 +42,9 @@ function readDataObjectFromFile(dirPath, fileName) {
         const raw = readFileSync(resolve(outDir, fileName), 'utf8');
         dataObject = JSON.parse(raw);
     } catch (error) {
+        if (error.code === 'ENOENT') {
+            return noFileSefault;
+        }
         console.warn(`Error while trying to read from ${fullFilePath}`, error);
     }
     return dataObject;
@@ -157,8 +160,8 @@ async function checkAlerts({ alertKeys, bot, fetchTimeoutMs, notifyReqsArr }) {
 console.log(`Server initializing...`);
 const {checkAlertsIntervalMs, botToken} = loadEnvVars();
 const fetchTimeoutMs = checkAlertsIntervalMs - 1000;
-const notifyReqsArr = readDataObjectFromFile('.', NOTIFY_REQS_FILE_NAME) || [];
-const alertsKeysArray = readDataObjectFromFile('.', ALERT_KEYS_FILE_NAME) || [];
+const notifyReqsArr = readDataObjectFromFile('.', NOTIFY_REQS_FILE_NAME, []) || [];
+const alertsKeysArray = readDataObjectFromFile('.', ALERT_KEYS_FILE_NAME, []) || [];
 const alertKeys = new Set(alertsKeysArray);
 const bot = initTelegramBot(botToken);
 console.log(`Server running...`);
