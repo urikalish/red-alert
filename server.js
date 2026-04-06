@@ -138,9 +138,10 @@ async function checkAlerts({ alertKeys, bot, fetchTimeoutMs, notifyReqsArr }) {
             for (let n of req.nowNotifications) {
                 const location = a.data;
                 if (n.locations.includes(location)) {
-                    const time = a.alertDate.split(' ')[1];                    
+                    //const time = a.alertDate.split(' ')[1];                    
+                    //req.msgs.push(`${time}\n${location}\n${event}`);
                     const event = a.category === 14 ? `התרעה מקדימה` : a.title;
-                    req.msgs.push(`${time}\n${location}\n${event}`);
+                    req.msgs.push(`${location}\n${event}`);
                     break;
                 }
             }
