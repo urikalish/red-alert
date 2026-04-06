@@ -1,2 +1,1 @@
 # red-alert
-red-alert

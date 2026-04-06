@@ -1,13 +1,11 @@
 import { resolve, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { config as loadEnv } from 'dotenv';
+import { Telegraf } from 'telegraf';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-let fetchAlertsIntervalMs = 10000;
-let fetchTimeoutMs = 9000;
-let locations = '';
 let allAlerts = [];
 let allAlertsKeys = new Set();
 
@@ -29,12 +27,24 @@ function loadEnvVars() {
         }
         return value;
     };
-    fetchAlertsIntervalMs = requireEnvVar('FETCH_ALERTS_INTERVAL_MS');
-    fetchTimeoutMs = requireEnvVar('FETCH_TIMEOUT_MS');
-    locations = requireEnvVar('LOCATIONS');    
+    return {
+        checkAlertsIntervalMs: requireEnvVar('CHECK_ALERTS_INTERVAL_MS'),
+        locations: requireEnvVar('LOCATIONS'),
+        botToken: requireEnvVar('BOT_TOKEN'),
+        chatId: requireEnvVar('CHAT_ID'),
+    }
 }
 
-async function fetchWithTimeout(url) {
+function initBot(botToken) {
+    console.log(`Bot initializing...`);
+    const bot = new Telegraf(botToken);
+    process.once('SIGINT', () => bot.stop('SIGINT'));
+    process.once('SIGTERM', () => bot.stop('SIGTERM'));
+    console.log(`Bot initialized.`);
+    return bot;
+}
+
+async function fetchWithTimeout(url, fetchTimeoutMs) {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), fetchTimeoutMs);
     try {
@@ -44,11 +54,11 @@ async function fetchWithTimeout(url) {
     }
 }
 
-async function fetchAlertsHistory() {
+async function fetchAlertsHistory(fetchTimeoutMs) {
     let alerts = [];
     const url = `https://www.oref.org.il/warningMessages/alert/History/AlertsHistory.json`;
     try {
-        const response = await fetchWithTimeout(url);
+        const response = await fetchWithTimeout(url, fetchTimeoutMs);
         if (response.ok) {
             alerts = await response.json();                
         } else {
@@ -60,8 +70,23 @@ async function fetchAlertsHistory() {
 
 const getAlertKey = alert => `${alert.alertDate}|${alert.data}|${alert.category}`;
 
-async function handleAlerts() {
-    const fetchedAlerts = await fetchAlertsHistory();
+async function reportToTelegram(bot, chatId, alerts) {
+    try {
+        const msgs = [];
+        alerts.forEach(alert => {
+            const time = alert.alertDate.split(' ')[1];
+            msgs.push(`${time}\n${alert.data}\n${alert.title}`);
+        });
+        console.log(`Reporting to Telegram...`);
+        await bot.telegram.sendMessage(chatId, msgs.join('\n')).catch(console.error);
+        console.log(`Reported to Telegram.`);
+    } catch (error) {
+        console.error('Failed posting to Telegram!', error);
+    }
+}
+
+async function checkAlerts(fetchTimeoutMs, locations, bot, chatId) {
+    const fetchedAlerts = await fetchAlertsHistory(fetchTimeoutMs);
     const newAlerts = fetchedAlerts.filter(alert => !allAlertsKeys.has(getAlertKey(alert)));
     allAlerts = fetchedAlerts;
     allAlertsKeys = new Set(allAlerts.map(getAlertKey));
@@ -71,7 +96,7 @@ async function handleAlerts() {
     console.log(`${newAlerts.length} new alerts.`);
     const locationsArr = locations.trim().split(',').map(i => i.trim());
     const locationAlerts = [];
-    newAlerts.array.forEach(alert => {
+    newAlerts.forEach(alert => {
         if (locationsArr.includes(alert.data)) {
             locationAlerts.push(alert);
         }
@@ -79,12 +104,18 @@ async function handleAlerts() {
     if (locationAlerts.length === 0) {
         return;
     }
+    locationAlerts.sort((a, b) => new Date(a.alertDate) - new Date(b.alertDate));
     locationAlerts.forEach(alert => {
         console.log(alert);
     });
+    reportToTelegram(bot, chatId, locationAlerts);    
 }
 
 console.log(`Server running...`);
-loadEnvVars();
-handleAlerts();
-setInterval(handleAlerts, fetchAlertsIntervalMs);
+const {checkAlertsIntervalMs, locations, botToken, chatId} = loadEnvVars();
+const fetchTimeoutMs = checkAlertsIntervalMs - 1000;
+const bot = initBot(botToken);
+checkAlerts(fetchTimeoutMs, locations, bot, chatId);
+setInterval(() => {
+    checkAlerts(fetchTimeoutMs, locations, bot, chatId);
+}, checkAlertsIntervalMs);
