@@ -8,6 +8,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 const ALERT_KEYS_FILE_NAME = 'alert-keys.json';
+const NOTIFY_REQS_FILE_NAME = 'notify-reqs.json';
 
 function loadEnvVars() {
     const ENV_PATH = resolve(__dirname, '.env');
@@ -29,9 +30,7 @@ function loadEnvVars() {
     };
     return {
         checkAlertsIntervalMs: requireEnvVar('CHECK_ALERTS_INTERVAL_MS'),
-        locations: requireEnvVar('LOCATIONS'),
         botToken: requireEnvVar('BOT_TOKEN'),
-        chatId: requireEnvVar('CHAT_ID'),
     }
 }
 
@@ -84,6 +83,7 @@ async function fetchAlertsHistory(fetchTimeoutMs) {
             console.error(`Error fetching alerts history!`, response.status, response.statusText);
         }
     } catch {}
+    alerts.sort((a, b) => new Date(a.alertDate) - new Date(b.alertDate));
     return alerts;
 }
 
@@ -108,43 +108,62 @@ async function postToTelegram(bot, chatId, msgs) {
     }
 }
 
-async function checkAlerts(alertKeys, fetchTimeoutMs, locationsArr, bot, chatId) {
-    const fetchedAlerts = await fetchAlertsHistory(fetchTimeoutMs);
-    const relevantAlerts = fetchedAlerts.filter(alert => locationsArr.includes(alert.data));
-    const newRelevantAlerts = [];
-    relevantAlerts.forEach(alert => {
-        const alertKey = getAlertKey(alert);
-        if (!alertKeys.has(alertKey)) {
-            alertKeys.add(alertKey);
-            newRelevantAlerts.push(alert);    
-        }
-    });
-    if (newRelevantAlerts.length === 0) {
-        return;
+function getIsrDayAndHour() {
+    const now = new Date();
+    const ThreeLetterDay = now.toLocaleDateString('en-US', { weekday: 'short', timeZone: 'Asia/Jerusalem' });
+    const TwoDigitHour = parseInt(now.toLocaleTimeString('en-US', { hour: '2-digit', hour12: false, timeZone: 'Asia/Jerusalem' }));
+    return {
+        ThreeLetterDay,
+        TwoDigitHour
     }
-    newRelevantAlerts.sort((a, b) => new Date(a.alertDate) - new Date(b.alertDate));
-    newRelevantAlerts.forEach(alert => {
-        console.log(alert);
-    });
-    const msgs = [];
-    newRelevantAlerts.forEach(alert => {
-        const time = alert.alertDate.split(' ')[1];
-        const location = alert.data;
-        const event = alert.category === 14 ? `התרעה מקדימה` : alert.title;
-        msgs.push(`${time}\n${location}\n${event}`);
-    });
-    await postToTelegram(bot, chatId, msgs);
-    writeDataObjectToFile([...alertKeys], '.', ALERT_KEYS_FILE_NAME);
 }
 
-console.log(`Server running...`);
-const {checkAlertsIntervalMs, locations, botToken, chatId} = loadEnvVars();
+async function checkAlerts({ alertKeys, bot, fetchTimeoutMs, notifyReqsArr }) {
+    let hasNewNotifications = false;
+    const fetchedAlerts = await fetchAlertsHistory(fetchTimeoutMs);
+    for (a of fetchedAlerts) {
+        const alertKey = getAlertKey(a);
+        if (alertKeys.has(alertKey)) {
+            continue;
+        }
+        const {threeLetterDay, twoDigitHour} = getIsrDayAndHour();
+        for (req of notifyReqsArr) {
+            for (n of req.notifications) {
+                const location = alert.data;
+                if (n.days.includes(threeLetterDay) && n.hours.includes(twoDigitHour) && n.location.includes(location)) {
+                    hasNewNotifications = true;
+                    alertKeys.add(alertKey);
+                    const time = alert.alertDate.split(' ')[1];                    
+                    const event = alert.category === 14 ? `התרעה מקדימה` : alert.title;
+                    if (!notifyReqsArr.msgs) {
+                        notifyReqsArr.msgs = [];
+                    }
+                    msgs.push(`${time}\n${location}\n${event}`);
+                    break;
+                }
+            }
+            if (req.msgs) {
+                await postToTelegram(bot, req.chatId, msgs);
+            }
+        }
+    }
+    if (hasNewNotifications) {
+        writeDataObjectToFile([...alertKeys], '.', ALERT_KEYS_FILE_NAME);
+    }
+}
+
+console.log(`Server initializing...`);
+const {checkAlertsIntervalMs, botToken} = loadEnvVars();
 const fetchTimeoutMs = checkAlertsIntervalMs - 1000;
-const locationsArr = locations.trim().split(',').map(i => i.trim());
+const notifyReqsArr = readDataObjectFromFile('.', NOTIFY_REQS_FILE_NAME) || [];
 const alertsKeysArray = readDataObjectFromFile('.', ALERT_KEYS_FILE_NAME) || [];
 const alertKeys = new Set(alertsKeysArray);
 const bot = initTelegramBot(botToken);
-checkAlerts(alertKeys, fetchTimeoutMs, locationsArr, bot, chatId);
+console.log(`Server running...`);
+
+//postToTelegram(bot, chatId, [`TEST`]);
+
+checkAlerts({ alertKeys, bot, fetchTimeoutMs, notifyReqsArr });
 setInterval(() => {
-    checkAlerts(alertKeys, fetchTimeoutMs, locationsArr, bot, chatId);
+    checkAlerts({ alertKeys, bot, fetchTimeoutMs, notifyReqsArr });
 }, checkAlertsIntervalMs);
