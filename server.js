@@ -102,7 +102,7 @@ function initTelegramBot(botToken) {
 async function postToTelegram(bot, chatId, msgs) {
     try {
         console.log(`Posting to Telegram...`);
-        await bot.telegram.sendMessage(chatId, msgs.join('\n')).catch(console.error);
+        await bot.telegram.sendMessage(chatId, msgs.join('\n\n')).catch(console.error);
         console.log(`Posted to Telegram.`);
     } catch (error) {
         console.error('Failed posting to Telegram!', error);
