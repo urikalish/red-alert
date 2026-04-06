@@ -70,15 +70,8 @@ async function fetchAlertsHistory(fetchTimeoutMs) {
 
 const getAlertKey = alert => `${alert.alertDate}|${alert.data}|${alert.category}`;
 
-async function reportToTelegram(bot, chatId, alerts) {
+async function reportToTelegram(bot, chatId, msgs) {
     try {
-        const msgs = [];
-        alerts.forEach(alert => {
-            const time = alert.alertDate.split(' ')[1];
-            const location = alert.data;
-            const event = alert.category === 14 ? `התרעה מקדימה` : alert.title;
-            msgs.push(`${time}\n${location}\n${event}`);
-        });
         console.log(`Reporting to Telegram...`);
         await bot.telegram.sendMessage(chatId, msgs.join('\n')).catch(console.error);
         console.log(`Reported to Telegram.`);
@@ -110,13 +103,21 @@ async function checkAlerts(fetchTimeoutMs, locations, bot, chatId) {
     locationAlerts.forEach(alert => {
         console.log(alert);
     });
-    reportToTelegram(bot, chatId, locationAlerts);    
+    const msgs = [];
+        alerts.forEach(alert => {
+            const time = alert.alertDate.split(' ')[1];
+            const location = alert.data;
+            const event = alert.category === 14 ? `התרעה מקדימה` : alert.title;
+            msgs.push(`${time}\n${location}\n${event}`);
+        });
+    reportToTelegram(bot, chatId, msgs);    
 }
 
 console.log(`Server running...`);
 const {checkAlertsIntervalMs, locations, botToken, chatId} = loadEnvVars();
 const fetchTimeoutMs = checkAlertsIntervalMs - 1000;
 const bot = initBot(botToken);
+reportToTelegram(bot, chatId, [`TEST`]);
 checkAlerts(fetchTimeoutMs, locations, bot, chatId);
 setInterval(() => {
     checkAlerts(fetchTimeoutMs, locations, bot, chatId);
