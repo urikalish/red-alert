@@ -1,4 +1,5 @@
 import { resolve, dirname } from 'path';
+import { readFileSync, writeFileSync, mkdirSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { config as loadEnv } from 'dotenv';
 import { Telegraf } from 'telegraf';
@@ -6,8 +7,7 @@ import { Telegraf } from 'telegraf';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-let allAlerts = [];
-let allAlertsKeys = new Set();
+const ALERT_KEYS_FILE_NAME = 'alert-keys.json';
 
 function loadEnvVars() {
     const ENV_PATH = resolve(__dirname, '.env');
@@ -35,13 +35,32 @@ function loadEnvVars() {
     }
 }
 
-function initBot(botToken) {
-    console.log(`Bot initializing...`);
-    const bot = new Telegraf(botToken);
-    process.once('SIGINT', () => bot.stop('SIGINT'));
-    process.once('SIGTERM', () => bot.stop('SIGTERM'));
-    console.log(`Bot initialized.`);
-    return bot;
+function readDataObjectFromFile(dirPath, fileName) {
+    let dataObject = null;
+    const fullFilePath = `${dirPath}/${fileName}`;
+    try {
+        const outDir = resolve(__dirname, dirPath);
+        const raw = readFileSync(resolve(outDir, fileName), 'utf8');
+        dataObject = JSON.parse(raw);
+    } catch (error) {
+        console.warn(`Error while trying to read from ${fullFilePath}`, error);
+    }
+    return dataObject;
+}
+
+function writeDataObjectToFile(dataObject, dirPath, fileName) {
+    const fullFilePath = `${dirPath}/${fileName}`;
+    console.log(`Writing to ${fullFilePath}...`);
+    try {
+        const outDir = resolve(__dirname, dirPath);
+        mkdirSync(outDir, { recursive: true });
+        writeFileSync(resolve(outDir, fileName), JSON.stringify(dataObject, null, 2));
+        console.log(`File ${fullFilePath} updated.`);
+        return true;
+    } catch (error) {
+        console.error(`Error while trying to write to ${fullFilePath}`, error);
+        return false;
+    }
 }
 
 async function fetchWithTimeout(url, fetchTimeoutMs) {
@@ -70,55 +89,62 @@ async function fetchAlertsHistory(fetchTimeoutMs) {
 
 const getAlertKey = alert => `${alert.alertDate}|${alert.data}|${alert.category}`;
 
-async function reportToTelegram(bot, chatId, msgs) {
+function initTelegramBot(botToken) {
+    console.log(`Bot initializing...`);
+    const bot = new Telegraf(botToken);
+    process.once('SIGINT', () => bot.stop('SIGINT'));
+    process.once('SIGTERM', () => bot.stop('SIGTERM'));
+    console.log(`Bot initialized.`);
+    return bot;
+}
+
+async function postToTelegram(bot, chatId, msgs) {
     try {
-        console.log(`Reporting to Telegram...`);
+        console.log(`Posting to Telegram...`);
         await bot.telegram.sendMessage(chatId, msgs.join('\n')).catch(console.error);
-        console.log(`Reported to Telegram.`);
+        console.log(`Posted to Telegram.`);
     } catch (error) {
         console.error('Failed posting to Telegram!', error);
     }
 }
 
-async function checkAlerts(fetchTimeoutMs, locations, bot, chatId) {
+async function checkAlerts(alertKeys, fetchTimeoutMs, locationsArr, bot, chatId) {
     const fetchedAlerts = await fetchAlertsHistory(fetchTimeoutMs);
-    const newAlerts = fetchedAlerts.filter(alert => !allAlertsKeys.has(getAlertKey(alert)));
-    allAlerts = fetchedAlerts;
-    allAlertsKeys = new Set(allAlerts.map(getAlertKey));
-    if (newAlerts.length === 0) {
-        return;
-    }
-    console.log(`${newAlerts.length} new alerts.`);
-    const locationsArr = locations.trim().split(',').map(i => i.trim());
-    const locationAlerts = [];
-    newAlerts.forEach(alert => {
-        if (locationsArr.includes(alert.data)) {
-            locationAlerts.push(alert);
+    const relevantAlerts = fetchedAlerts.filter(alert => locationsArr.includes(alert.data));
+    const newRelevantAlerts = [];
+    relevantAlerts.forEach(alert => {
+        const alertKey = getAlertKey(alert);
+        if (!alertKeys.has(alertKey)) {
+            alertKeys.add(alertKey);
+            newRelevantAlerts.push(alert);    
         }
     });
-    if (locationAlerts.length === 0) {
+    if (newRelevantAlerts.length === 0) {
         return;
     }
-    locationAlerts.sort((a, b) => new Date(a.alertDate) - new Date(b.alertDate));
-    locationAlerts.forEach(alert => {
+    newRelevantAlerts.sort((a, b) => new Date(a.alertDate) - new Date(b.alertDate));
+    newRelevantAlerts.forEach(alert => {
         console.log(alert);
     });
     const msgs = [];
-        alerts.forEach(alert => {
-            const time = alert.alertDate.split(' ')[1];
-            const location = alert.data;
-            const event = alert.category === 14 ? `התרעה מקדימה` : alert.title;
-            msgs.push(`${time}\n${location}\n${event}`);
-        });
-    reportToTelegram(bot, chatId, msgs);    
+    newRelevantAlerts.forEach(alert => {
+        const time = alert.alertDate.split(' ')[1];
+        const location = alert.data;
+        const event = alert.category === 14 ? `התרעה מקדימה` : alert.title;
+        msgs.push(`${time}\n${location}\n${event}`);
+    });
+    await postToTelegram(bot, chatId, msgs);
+    writeDataObjectToFile([...alertKeys], '.', ALERT_KEYS_FILE_NAME);
 }
 
 console.log(`Server running...`);
 const {checkAlertsIntervalMs, locations, botToken, chatId} = loadEnvVars();
 const fetchTimeoutMs = checkAlertsIntervalMs - 1000;
-const bot = initBot(botToken);
-reportToTelegram(bot, chatId, [`TEST`]);
-checkAlerts(fetchTimeoutMs, locations, bot, chatId);
+const locationsArr = locations.trim().split(',').map(i => i.trim());
+const alertsKeysArray = readDataObjectFromFile('.', ALERT_KEYS_FILE_NAME) || [];
+const alertKeys = new Set(alertsKeysArray);
+const bot = initTelegramBot(botToken);
+checkAlerts(alertKeys, fetchTimeoutMs, locationsArr, bot, chatId);
 setInterval(() => {
-    checkAlerts(fetchTimeoutMs, locations, bot, chatId);
+    checkAlerts(alertKeys, fetchTimeoutMs, locationsArr, bot, chatId);
 }, checkAlertsIntervalMs);
