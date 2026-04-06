@@ -57,7 +57,6 @@ function writeDataObjectToFile(dataObject, dirPath, fileName) {
         const outDir = resolve(__dirname, dirPath);
         mkdirSync(outDir, { recursive: true });
         writeFileSync(resolve(outDir, fileName), JSON.stringify(dataObject, null, 2));
-        console.log(`File ${fullFilePath} updated.`);
         return true;
     } catch (error) {
         console.error(`Error while trying to write to ${fullFilePath}`, error);
@@ -122,6 +121,7 @@ function getIsrDayAndHour() {
 }
 
 async function checkAlerts({ alertKeys, bot, fetchTimeoutMs, notifyReqsArr }) {
+    const {threeLetterDay, twoDigitHour} = getIsrDayAndHour();
     let hasNewNotifications = false;
     const fetchedAlerts = await fetchAlertsHistory(fetchTimeoutMs);
     for (let a of fetchedAlerts) {
@@ -129,7 +129,6 @@ async function checkAlerts({ alertKeys, bot, fetchTimeoutMs, notifyReqsArr }) {
         if (alertKeys.has(alertKey)) {
             continue;
         }
-        const {threeLetterDay, twoDigitHour} = getIsrDayAndHour();
         for (let req of notifyReqsArr) {
             for (let n of req.notifications) {
                 const location = a.data;
