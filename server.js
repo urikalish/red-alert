@@ -75,7 +75,9 @@ async function reportToTelegram(bot, chatId, alerts) {
         const msgs = [];
         alerts.forEach(alert => {
             const time = alert.alertDate.split(' ')[1];
-            msgs.push(`${time}\n${alert.data}\n${alert.title}`);
+            const location = alert.data;
+            const event = alert.category === 14 ? `התרעה מקדימה` : alert.title;
+            msgs.push(`${time}\n${location}\n${event}`);
         });
         console.log(`Reporting to Telegram...`);
         await bot.telegram.sendMessage(chatId, msgs.join('\n')).catch(console.error);
