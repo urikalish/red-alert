@@ -119,7 +119,7 @@ function getIsrDayAndHour() {
     }
 }
 
-async function checkAlerts({ alertKeys, bot, fetchTimeoutMs, notifyReqsArr }) {
+async function checkAlerts({ alertKeys, bot, checkAlertsIntervalMs, fetchTimeoutMs, notifyReqsArr }) {
     const {threeLetterDay, twoDigitHour} = getIsrDayAndHour();
     for (let req of notifyReqsArr) {
         req.nowNotifications = req.notifications.filter(n => n.days.includes(threeLetterDay) && n.hours.includes(twoDigitHour));
@@ -152,6 +152,9 @@ async function checkAlerts({ alertKeys, bot, fetchTimeoutMs, notifyReqsArr }) {
         }
         writeDataObjectToFile([...alertKeys], '.', ALERT_KEYS_FILE_NAME);
     }
+    setTimeout(() => {
+        checkAlerts({ alertKeys, bot, checkAlertsIntervalMs, fetchTimeoutMs, notifyReqsArr });
+    }, checkAlertsIntervalMs);
 }
 
 console.log(`Server initializing...`);
@@ -162,10 +165,4 @@ const alertsKeysArray = readDataObjectFromFile('.', ALERT_KEYS_FILE_NAME, []) ||
 const alertKeys = new Set(alertsKeysArray);
 const bot = initTelegramBot(botToken);
 console.log(`Server running...`);
-
-//postToTelegram(bot, chatId, [`TEST`]);
-
-checkAlerts({ alertKeys, bot, fetchTimeoutMs, notifyReqsArr });
-setInterval(() => {
-    checkAlerts({ alertKeys, bot, fetchTimeoutMs, notifyReqsArr });
-}, checkAlertsIntervalMs);
+checkAlerts({ alertKeys, bot, checkAlertsIntervalMs, fetchTimeoutMs, notifyReqsArr });
