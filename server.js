@@ -110,44 +110,46 @@ async function postToTelegram(bot, chatId, msgs) {
 
 function getIsrDayAndHour() {
     const now = new Date();
-    const ThreeLetterDay = now.toLocaleDateString('en-US', { weekday: 'short', timeZone: 'Asia/Jerusalem' });
-    const TwoDigitHour = parseInt(now.toLocaleTimeString('en-US', { hour: '2-digit', hour12: false, timeZone: 'Asia/Jerusalem' }));
+    const threeLetterDay = now.toLocaleDateString('en-US', { weekday: 'short', timeZone: 'Asia/Jerusalem' });
+    const twoDigitHour = parseInt(now.toLocaleTimeString('en-US', { hour: '2-digit', hour12: false, timeZone: 'Asia/Jerusalem' }));
     return {
-        ThreeLetterDay,
-        TwoDigitHour
+        threeLetterDay,
+        twoDigitHour
     }
 }
 
 async function checkAlerts({ alertKeys, bot, fetchTimeoutMs, notifyReqsArr }) {
     let hasNewNotifications = false;
     const fetchedAlerts = await fetchAlertsHistory(fetchTimeoutMs);
-    for (a of fetchedAlerts) {
+    for (let a of fetchedAlerts) {
         const alertKey = getAlertKey(a);
         if (alertKeys.has(alertKey)) {
             continue;
         }
         const {threeLetterDay, twoDigitHour} = getIsrDayAndHour();
-        for (req of notifyReqsArr) {
-            for (n of req.notifications) {
-                const location = alert.data;
-                if (n.days.includes(threeLetterDay) && n.hours.includes(twoDigitHour) && n.location.includes(location)) {
+        for (let req of notifyReqsArr) {
+            for (let n of req.notifications) {
+                const location = a.data;
+                if (n.days.includes(threeLetterDay) && n.hours.includes(twoDigitHour) && n.locations.includes(location)) {
                     hasNewNotifications = true;
                     alertKeys.add(alertKey);
-                    const time = alert.alertDate.split(' ')[1];                    
-                    const event = alert.category === 14 ? `התרעה מקדימה` : alert.title;
-                    if (!notifyReqsArr.msgs) {
-                        notifyReqsArr.msgs = [];
+                    const time = a.alertDate.split(' ')[1];                    
+                    const event = a.category === 14 ? `התרעה מקדימה` : a.title;
+                    if (!req.msgs) {
+                        req.msgs = [];
                     }
-                    msgs.push(`${time}\n${location}\n${event}`);
+                    req.msgs.push(`${time}\n${location}\n${event}`);
                     break;
                 }
-            }
-            if (req.msgs) {
-                await postToTelegram(bot, req.chatId, msgs);
             }
         }
     }
     if (hasNewNotifications) {
+        for (let req of notifyReqsArr) {
+            if (req.msgs) {
+                await postToTelegram(bot, req.chatId, req.msgs);    
+            }
+        }
         writeDataObjectToFile([...alertKeys], '.', ALERT_KEYS_FILE_NAME);
     }
 }
