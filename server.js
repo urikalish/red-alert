@@ -52,7 +52,6 @@ function readDataObjectFromFile(dirPath, fileName, noFileSefault) {
 
 function writeDataObjectToFile(dataObject, dirPath, fileName) {
     const fullFilePath = `${dirPath}/${fileName}`;
-    console.log(`Writing to ${fullFilePath}...`);
     try {
         const outDir = resolve(__dirname, dirPath);
         mkdirSync(outDir, { recursive: true });
@@ -122,35 +121,34 @@ function getIsrDayAndHour() {
 
 async function checkAlerts({ alertKeys, bot, fetchTimeoutMs, notifyReqsArr }) {
     const {threeLetterDay, twoDigitHour} = getIsrDayAndHour();
-    let hasNewNotifications = false;
+    for (let req of notifyReqsArr) {
+        req.nowNotifications = req.notifications.filter(n => n.days.includes(threeLetterDay) && n.hours.includes(twoDigitHour));
+        req.msgs = [];
+    }
+    let newAlerts = false;
     const fetchedAlerts = await fetchAlertsHistory(fetchTimeoutMs);
     for (let a of fetchedAlerts) {
         const alertKey = getAlertKey(a);
         if (alertKeys.has(alertKey)) {
             continue;
         }
+        newAlerts = true;
+        alertKeys.add(alertKey);
         for (let req of notifyReqsArr) {
-            for (let n of req.notifications) {
+            for (let n of req.nowNotifications) {
                 const location = a.data;
-                if (n.days.includes(threeLetterDay) && n.hours.includes(twoDigitHour) && n.locations.includes(location)) {
-                    hasNewNotifications = true;
-                    alertKeys.add(alertKey);
+                if (n.locations.includes(location)) {
                     const time = a.alertDate.split(' ')[1];                    
                     const event = a.category === 14 ? `התרעה מקדימה` : a.title;
-                    if (!req.msgs) {
-                        req.msgs = [];
-                    }
                     req.msgs.push(`${time}\n${location}\n${event}`);
                     break;
                 }
             }
         }
-    }
-    if (hasNewNotifications) {
-        for (let req of notifyReqsArr) {
-            if (req.msgs) {
-                await postToTelegram(bot, req.chatId, req.msgs);    
-            }
+    }    
+    if (newAlerts) {
+        for (let req of notifyReqsArr.filter(r => r.msgs.length > 0)) {
+            await postToTelegram(bot, req.chatId, req.msgs);
         }
         writeDataObjectToFile([...alertKeys], '.', ALERT_KEYS_FILE_NAME);
     }
