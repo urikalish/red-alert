@@ -101,9 +101,9 @@ function initTelegramBot(botToken) {
 
 async function postToTelegram(bot, chatId, msgs) {
     try {
-        console.log(`Posting to Telegram...`);
+        console.log(`Posting ${msgs.length} messages to Telegram channel ${chatId}...`);
+        console.log(msgs);
         await bot.telegram.sendMessage(chatId, msgs.join('\n\n')).catch(console.error);
-        console.log(`Posted to Telegram.`);
     } catch (error) {
         console.error('Failed posting to Telegram!', error);
     }
@@ -138,10 +138,9 @@ async function checkAlerts({ alertKeys, bot, fetchTimeoutMs, notifyReqsArr }) {
             for (let n of req.nowNotifications) {
                 const location = a.data;
                 if (n.locations.includes(location)) {
-                    //const time = a.alertDate.split(' ')[1];                    
-                    //req.msgs.push(`${time}\n${location}\n${event}`);
+                    const time = a.alertDate.split(' ')[1];                    
                     const event = a.category === 14 ? `התרעה מקדימה` : a.title;
-                    req.msgs.push(`${location}\n${event}`);
+                    req.msgs.push(`${time}\n${location} - ${event}`);
                     break;
                 }
             }
