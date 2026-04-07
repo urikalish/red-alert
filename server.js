@@ -34,11 +34,12 @@ const __dirname = dirname(__filename);
 
 const NOTIFY_REQS_FILE_NAME = 'notify-reqs.json';
 const FETCH_TIMEOUT_MS = 10000;
+const ALERTS_CACHE_SIZE = 10000;
 
-let notifyReqsArr = [];
+let notifyReqs = [];
 let checkAlertsIntervalMs = 10000;
 let bot = null;
-const alertKeys = new BoundedSet(10000);
+const alertKeys = new BoundedSet(ALERTS_CACHE_SIZE);
 
 function loadEnvVars() {
     const ENV_PATH = resolve(__dirname, '.env');
@@ -152,38 +153,47 @@ function getIsrDayAndHour() {
 }
 
 async function checkAlerts(shouldPostAlerts = true) {
-    const {threeLetterDay, twoDigitHour} = getIsrDayAndHour();
-    for (let req of notifyReqsArr) {
-        req.nowNotifications = req.notifications.filter(n => n.days.includes(threeLetterDay) && n.hours.includes(twoDigitHour));
-        req.msgs = [];
-    }
-    let newAlerts = false;
+    const newAlerts = [];
     const fetchedAlerts = await fetchAlertsHistory();
     for (let a of fetchedAlerts) {
         const alertKey = getAlertKey(a);
         if (alertKeys.has(alertKey)) {
             continue;
         }
-        newAlerts = true;
         alertKeys.add(alertKey);
-        for (let req of notifyReqsArr) {
-            for (let n of req.nowNotifications) {
-                const location = a.data;
-                if (n.locations.includes(location)) {
-                    const event = a.category === 14 ? `התרעה מקדימה` : a.title;
+        newAlerts.push(a);
+    }
+
+    if (newAlerts.length > 0 && shouldPostAlerts) {
+        const {threeLetterDay, twoDigitHour} = getIsrDayAndHour();
+        for (let r of notifyReqs) {
+            r.curSchedules = req.schedule.filter(s => s.days.includes(threeLetterDay) && s.hours.includes(twoDigitHour));
+            r.curEvents = new Map();
+            for (let a of newAlerts) {
+                for (let s of r.curSchedules) {
+                    if (!s.locations.includes(a.data)) {
+                        continue;
+                    }
                     //const time = a.alertDate.split(' ')[1];                    
-                    //req.msgs.push(`${time}\n${location} - ${event}`);
-                    req.msgs.push(`${location} - ${event}`);
-                    break;
+                    const event = a.category === 14 ? `התרעה מקדימה` : a.title;
+                    const location = a.data;
+                    if (!r.curEvents.has(event)) {
+                        r.curEvents.add(event, new Set());
+                    }
+                    r.curEvents.get(event).add(location);
                 }
             }
-        }
-    }    
-    if (newAlerts && shouldPostAlerts) {
-        for (let req of notifyReqsArr.filter(r => r.msgs.length > 0)) {
-            await postToTelegram(bot, req.telegramChatId, req.msgs);
+            const msgs = [];
+            for (let e of r.curEvents.keys()) {
+                let locations = [...r.curEvents.get(e)];
+                locations.sort((a, b) => a.localeCompare(b, 'he'));
+                let msg = `${e} - ${locations.join(`, `)}`;
+                msgs.push(msg);    
+            }
+            await postToTelegram(bot, r.telegramChatId, msgs);
         }
     }
+    
     setTimeout(() => {
         checkAlerts();
     }, checkAlertsIntervalMs);
@@ -191,7 +201,7 @@ async function checkAlerts(shouldPostAlerts = true) {
 
 console.log(`Server initializing...`);
 const {envVarCheckAlertsIntervalMs, envVarBotToken} = loadEnvVars();
-notifyReqsArr = readDataObjectFromFile('.', NOTIFY_REQS_FILE_NAME, []) || [];
+notifyReqs = readDataObjectFromFile('.', NOTIFY_REQS_FILE_NAME, []) || [];
 checkAlertsIntervalMs = parseInt(envVarCheckAlertsIntervalMs);
 bot = initTelegramBot(envVarBotToken);
 console.log(`Server running...`);
