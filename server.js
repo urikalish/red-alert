@@ -167,7 +167,7 @@ async function checkAlerts(shouldPostAlerts = true) {
     if (newAlerts.length > 0 && shouldPostAlerts) {
         const {threeLetterDay, twoDigitHour} = getIsrDayAndHour();
         for (let r of notifyReqs) {
-            r.curSchedules = req.schedule.filter(s => s.days.includes(threeLetterDay) && s.hours.includes(twoDigitHour));
+            r.curSchedules = r.schedule.filter(s => s.days.includes(threeLetterDay) && s.hours.includes(twoDigitHour));
             r.curEvents = new Map();
             for (let a of newAlerts) {
                 for (let s of r.curSchedules) {
@@ -178,7 +178,7 @@ async function checkAlerts(shouldPostAlerts = true) {
                     const event = a.category === 14 ? `התרעה מקדימה` : a.title;
                     const location = a.data;
                     if (!r.curEvents.has(event)) {
-                        r.curEvents.add(event, new Set());
+                        r.curEvents.set(event, new Set());
                     }
                     r.curEvents.get(event).add(location);
                 }
