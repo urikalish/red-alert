@@ -184,10 +184,10 @@ async function checkAlerts(shouldPostAlerts = true) {
                 }
             }
             const msgs = [];
-            for (let e of r.curEvents.keys()) {
-                let locations = [...r.curEvents.get(e)];
+            for (let event of r.curEvents.keys()) {
+                let locations = [...r.curEvents.get(event)];
                 locations.sort((a, b) => a.localeCompare(b, 'he'));
-                let msg = `${e} - ${locations.join(`, `)}`;
+                let msg = `${event} - ${locations.join(`, `)}`;
                 msgs.push(msg);    
             }
             await postToTelegram(bot, r.telegramChatId, msgs);
