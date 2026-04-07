@@ -1,5 +1,5 @@
 import { resolve, dirname } from 'path';
-import { readFileSync, writeFileSync, mkdirSync } from 'fs';
+import { readFileSync, mkdirSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { config as loadEnv } from 'dotenv';
 import { Telegraf } from 'telegraf';
@@ -9,6 +9,11 @@ const __dirname = dirname(__filename);
 
 const NOTIFY_REQS_FILE_NAME = 'notify-reqs.json';
 const FETCH_TIMEOUT_MS = 10000;
+
+let notifyReqsArr = [];
+let checkAlertsIntervalMs = 10000;
+const alertKeys = new Set();
+let bot = null;
 
 function loadEnvVars() {
     const ENV_PATH = resolve(__dirname, '.env');
@@ -29,8 +34,8 @@ function loadEnvVars() {
         return value;
     };
     return {
-        checkAlertsIntervalMs: requireEnvVar('CHECK_ALERTS_INTERVAL_MS'),
-        botToken: requireEnvVar('BOT_TOKEN'),
+        envVarCheckAlertsIntervalMs: requireEnvVar('CHECK_ALERTS_INTERVAL_MS'),
+        envVarBotToken: requireEnvVar('BOT_TOKEN'),
     }
 }
 
@@ -50,6 +55,7 @@ function readDataObjectFromFile(dirPath, fileName, noFileSefault) {
     return dataObject;
 }
 
+/*
 function writeDataObjectToFile(dataObject, dirPath, fileName) {
     const fullFilePath = `${dirPath}/${fileName}`;
     try {
@@ -62,6 +68,7 @@ function writeDataObjectToFile(dataObject, dirPath, fileName) {
         return false;
     }
 }
+*/
 
 async function fetchWithTimeout(url, fetchTimeoutMs) {
     const controller = new AbortController();
@@ -119,7 +126,7 @@ function getIsrDayAndHour() {
     }
 }
 
-async function checkAlerts({ alertKeys, bot, checkAlertsIntervalMs, notifyReqsArr, shouldPostAlerts }) {
+async function checkAlerts(shouldPostAlerts = true) {
     const {threeLetterDay, twoDigitHour} = getIsrDayAndHour();
     for (let req of notifyReqsArr) {
         req.nowNotifications = req.notifications.filter(n => n.days.includes(threeLetterDay) && n.hours.includes(twoDigitHour));
@@ -152,18 +159,14 @@ async function checkAlerts({ alertKeys, bot, checkAlertsIntervalMs, notifyReqsAr
         }
     }
     setTimeout(() => {
-        checkAlerts({ alertKeys, bot, checkAlertsIntervalMs, notifyReqsArr, shouldPostAlerts: true });
+        checkAlerts();
     }, checkAlertsIntervalMs);
 }
 
 console.log(`Server initializing...`);
-const {checkAlertsIntervalMs, botToken} = loadEnvVars();
-const notifyReqsArr = readDataObjectFromFile('.', NOTIFY_REQS_FILE_NAME, []) || [];
-const bot = initTelegramBot(botToken);
+const {envVarCheckAlertsIntervalMs, envVarBotToken} = loadEnvVars();
+checkAlertsIntervalMs = parseInt(envVarCheckAlertsIntervalMs);
+bot = initTelegramBot(envVarBotToken);
+notifyReqsArr = readDataObjectFromFile('.', NOTIFY_REQS_FILE_NAME, []) || [];
 console.log(`Server running...`);
-checkAlerts({
-    alertKeys: new Set(),
-    bot,
-    checkAlertsIntervalMs,
-    notifyReqsArr,
-    shouldPostAlerts: false });
+checkAlerts(false);
