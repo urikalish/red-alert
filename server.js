@@ -4,6 +4,31 @@ import { fileURLToPath } from 'url';
 import { config as loadEnv } from 'dotenv';
 import { Telegraf } from 'telegraf';
 
+class BoundedSet {
+  constructor(maxSize) {
+    this.maxSize = maxSize;
+    this.set = new Set();
+  }
+  add(value) {
+    if (this.set.has(value)) return this;
+    if (this.set.size >= this.maxSize) {
+      const firstValue = this.set.values().next().value;
+      this.set.delete(firstValue);
+    }
+    this.set.add(value);
+    return this;
+  }
+  has(value) { return this.set.has(value); }
+  delete(value) { return this.set.delete(value); }
+  clear() { this.set.clear(); }
+  get size() { return this.set.size; }
+  values() { return this.set.values(); }
+  keys() { return this.set.keys(); }
+  entries() { return this.set.entries(); }
+  forEach(cb) { this.set.forEach(cb); }
+  [Symbol.iterator]() { return this.set[Symbol.iterator](); }
+}
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
@@ -13,7 +38,7 @@ const FETCH_TIMEOUT_MS = 10000;
 let notifyReqsArr = [];
 let checkAlertsIntervalMs = 10000;
 let bot = null;
-const alertKeys = new Set();
+const alertKeys = new BoundedSet(10000);
 
 function loadEnvVars() {
     const ENV_PATH = resolve(__dirname, '.env');
