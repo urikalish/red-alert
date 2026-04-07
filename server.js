@@ -190,7 +190,9 @@ async function checkAlerts(shouldPostAlerts = true) {
                 let msg = `${event} - ${locations.join(`, `)}`;
                 msgs.push(msg);    
             }
-            await postToTelegram(bot, r.telegramChatId, msgs);
+            if (msgs.length > 0) {
+                await postToTelegram(bot, r.telegramChatId, msgs);
+            }
         }
     }
     
