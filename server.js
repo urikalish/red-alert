@@ -181,7 +181,7 @@ async function checkAlerts(shouldPostAlerts = true) {
     }    
     if (newAlerts && shouldPostAlerts) {
         for (let req of notifyReqsArr.filter(r => r.msgs.length > 0)) {
-            await postToTelegram(bot, req.chatId, req.msgs);
+            await postToTelegram(bot, req.telegramChatId, req.msgs);
         }
     }
     setTimeout(() => {

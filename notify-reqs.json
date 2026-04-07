@@ -1,7 +1,7 @@
 [
     {
-        "requestId": "uk",
-        "chatId": "-1003758422482",
+        "id": "kalish",
+        "telegramChatId": "-1003758422482",
         "notifications": [
             {
                 "days": ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"],
@@ -26,8 +26,8 @@
         ]
     },
     {
-        "requestId": "test",
-        "chatId": "-1003852924566",
+        "id": "test",
+        "telegramChatId": "-1003852924566",
         "notifications": [
             {
                 "days": ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"],
