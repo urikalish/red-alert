@@ -183,6 +183,9 @@ async function checkAlerts(shouldPostAlerts = true) {
                     r.curEvents.get(event).add(location);
                 }
             }
+            if (r.curEvents.size === 0) {
+                continue;
+            }
             const msgs = [];
             for (let event of r.curEvents.keys()) {
                 let locations = [...r.curEvents.get(event)];
@@ -190,9 +193,7 @@ async function checkAlerts(shouldPostAlerts = true) {
                 let msg = `${event} - ${locations.join(`, `)}`;
                 msgs.push(msg);    
             }
-            if (msgs.length > 0) {
-                await postToTelegram(bot, r.telegramChatId, msgs);
-            }
+            await postToTelegram(bot, r.telegramChatId, msgs);
         }
     }
     
