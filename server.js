@@ -7,8 +7,8 @@ import { Telegraf } from 'telegraf';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-const ALERT_KEYS_FILE_NAME = 'alert-keys.json';
 const NOTIFY_REQS_FILE_NAME = 'notify-reqs.json';
+const FETCH_TIMEOUT_MS = 10000;
 
 function loadEnvVars() {
     const ENV_PATH = resolve(__dirname, '.env');
@@ -73,11 +73,11 @@ async function fetchWithTimeout(url, fetchTimeoutMs) {
     }
 }
 
-async function fetchAlertsHistory(fetchTimeoutMs) {
+async function fetchAlertsHistory() {
     let alerts = [];
     const url = `https://www.oref.org.il/warningMessages/alert/History/AlertsHistory.json`;
     try {
-        const response = await fetchWithTimeout(url, fetchTimeoutMs);
+        const response = await fetchWithTimeout(url, FETCH_TIMEOUT_MS);
         if (response.ok) {
             alerts = await response.json();                
         } else {
@@ -119,14 +119,14 @@ function getIsrDayAndHour() {
     }
 }
 
-async function checkAlerts({ alertKeys, bot, checkAlertsIntervalMs, fetchTimeoutMs, notifyReqsArr }) {
+async function checkAlerts({ alertKeys, bot, checkAlertsIntervalMs, notifyReqsArr, shouldPostAlerts }) {
     const {threeLetterDay, twoDigitHour} = getIsrDayAndHour();
     for (let req of notifyReqsArr) {
         req.nowNotifications = req.notifications.filter(n => n.days.includes(threeLetterDay) && n.hours.includes(twoDigitHour));
         req.msgs = [];
     }
     let newAlerts = false;
-    const fetchedAlerts = await fetchAlertsHistory(fetchTimeoutMs);
+    const fetchedAlerts = await fetchAlertsHistory();
     for (let a of fetchedAlerts) {
         const alertKey = getAlertKey(a);
         if (alertKeys.has(alertKey)) {
@@ -146,23 +146,24 @@ async function checkAlerts({ alertKeys, bot, checkAlertsIntervalMs, fetchTimeout
             }
         }
     }    
-    if (newAlerts) {
+    if (newAlerts && shouldPostAlerts) {
         for (let req of notifyReqsArr.filter(r => r.msgs.length > 0)) {
             await postToTelegram(bot, req.chatId, req.msgs);
         }
-        writeDataObjectToFile([...alertKeys], '.', ALERT_KEYS_FILE_NAME);
     }
     setTimeout(() => {
-        checkAlerts({ alertKeys, bot, checkAlertsIntervalMs, fetchTimeoutMs, notifyReqsArr });
+        checkAlerts({ alertKeys, bot, checkAlertsIntervalMs, notifyReqsArr, shouldPostAlerts: true });
     }, checkAlertsIntervalMs);
 }
 
 console.log(`Server initializing...`);
 const {checkAlertsIntervalMs, botToken} = loadEnvVars();
-const fetchTimeoutMs = checkAlertsIntervalMs - 1000;
 const notifyReqsArr = readDataObjectFromFile('.', NOTIFY_REQS_FILE_NAME, []) || [];
-const alertsKeysArray = readDataObjectFromFile('.', ALERT_KEYS_FILE_NAME, []) || [];
-const alertKeys = new Set(alertsKeysArray);
 const bot = initTelegramBot(botToken);
 console.log(`Server running...`);
-checkAlerts({ alertKeys, bot, checkAlertsIntervalMs, fetchTimeoutMs, notifyReqsArr });
+checkAlerts({
+    alertKeys: new Set(),
+    bot,
+    checkAlertsIntervalMs,
+    notifyReqsArr,
+    shouldPostAlerts: false });
