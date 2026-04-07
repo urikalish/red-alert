@@ -134,7 +134,7 @@ function initTelegramBot(botToken) {
 
 async function postToTelegram(bot, chatId, msgs) {
     try {
-        console.log(`Posting ${msgs.length} messages to Telegram channel ${chatId}...`);
+        console.log(`Posting to Telegram channel ${chatId}...`);
         console.log(msgs);
         await bot.telegram.sendMessage(chatId, msgs.join('\n\n')).catch(console.error);
     } catch (error) {
