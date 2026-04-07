@@ -12,8 +12,8 @@ const FETCH_TIMEOUT_MS = 10000;
 
 let notifyReqsArr = [];
 let checkAlertsIntervalMs = 10000;
-const alertKeys = new Set();
 let bot = null;
+const alertKeys = new Set();
 
 function loadEnvVars() {
     const ENV_PATH = resolve(__dirname, '.env');
@@ -145,9 +145,10 @@ async function checkAlerts(shouldPostAlerts = true) {
             for (let n of req.nowNotifications) {
                 const location = a.data;
                 if (n.locations.includes(location)) {
-                    const time = a.alertDate.split(' ')[1];                    
                     const event = a.category === 14 ? `התרעה מקדימה` : a.title;
-                    req.msgs.push(`${time}\n${location} - ${event}`);
+                    //const time = a.alertDate.split(' ')[1];                    
+                    //req.msgs.push(`${time}\n${location} - ${event}`);
+                    req.msgs.push(`${location} - ${event}`);
                     break;
                 }
             }
@@ -165,8 +166,8 @@ async function checkAlerts(shouldPostAlerts = true) {
 
 console.log(`Server initializing...`);
 const {envVarCheckAlertsIntervalMs, envVarBotToken} = loadEnvVars();
+notifyReqsArr = readDataObjectFromFile('.', NOTIFY_REQS_FILE_NAME, []) || [];
 checkAlertsIntervalMs = parseInt(envVarCheckAlertsIntervalMs);
 bot = initTelegramBot(envVarBotToken);
-notifyReqsArr = readDataObjectFromFile('.', NOTIFY_REQS_FILE_NAME, []) || [];
 console.log(`Server running...`);
 checkAlerts(false);
