@@ -1,5 +1,5 @@
 import { resolve, dirname } from 'path';
-import { readFileSync, mkdirSync } from 'fs';
+import { readFileSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { config as loadEnv } from 'dotenv';
 import { Telegraf } from 'telegraf';
@@ -65,20 +65,18 @@ function loadEnvVars() {
     }
 }
 
-function readDataObjectFromFile(dirPath, fileName, noFileSefault) {
-    let dataObject = null;
+function readDataObjectFromFile(dirPath, fileName) {
     const fullFilePath = `${dirPath}/${fileName}`;
     try {
         const outDir = resolve(__dirname, dirPath);
         const raw = readFileSync(resolve(outDir, fileName), 'utf8');
-        dataObject = JSON.parse(raw);
+        return JSON.parse(raw);
     } catch (error) {
         if (error.code === 'ENOENT') {
-            return noFileSefault;
+            return null;
         }
         console.warn(`Error while trying to read from ${fullFilePath}`, error);
     }
-    return dataObject;
 }
 
 /*
@@ -116,7 +114,9 @@ async function fetchAlertsHistory() {
         } else {
             console.error(`Error fetching alerts history!`, response.status, response.statusText);
         }
-    } catch {}
+    } catch(error) {
+        console.error(`Error fetching alerts history!`, error);
+    }
     alerts.sort((a, b) => new Date(a.alertDate) - new Date(b.alertDate));
     return alerts;
 }
@@ -136,7 +136,7 @@ async function postToTelegram(bot, chatId, msgs) {
     try {
         console.log(`Posting to Telegram channel ${chatId}...`);
         console.log(msgs);
-        await bot.telegram.sendMessage(chatId, msgs.join('\n\n')).catch(console.error);
+        await bot.telegram.sendMessage(chatId, msgs.join('\n\n'));
     } catch (error) {
         console.error('Failed posting to Telegram!', error);
     }
@@ -145,7 +145,7 @@ async function postToTelegram(bot, chatId, msgs) {
 function getIsrDayAndHour() {
     const now = new Date();
     const threeLetterDay = now.toLocaleDateString('en-US', { weekday: 'short', timeZone: 'Asia/Jerusalem' });
-    const twoDigitHour = parseInt(now.toLocaleTimeString('en-US', { hour: '2-digit', hour12: false, timeZone: 'Asia/Jerusalem' }));
+    const twoDigitHour = parseInt(now.toLocaleTimeString('en-US', { hour: '2-digit', hour12: false, timeZone: 'Asia/Jerusalem' }), 10);
     return {
         threeLetterDay,
         twoDigitHour
@@ -204,8 +204,8 @@ async function checkAlerts(shouldPostAlerts = true) {
 
 console.log(`Server initializing...`);
 const {envVarCheckAlertsIntervalMs, envVarBotToken} = loadEnvVars();
-notifyReqs = readDataObjectFromFile('.', NOTIFY_REQS_FILE_NAME, []) || [];
-checkAlertsIntervalMs = parseInt(envVarCheckAlertsIntervalMs);
+notifyReqs = readDataObjectFromFile('.', NOTIFY_REQS_FILE_NAME) || [];
+checkAlertsIntervalMs = parseInt(envVarCheckAlertsIntervalMs, 10);
 bot = initTelegramBot(envVarBotToken);
 console.log(`Server running...`);
 checkAlerts(false);
