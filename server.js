@@ -114,9 +114,7 @@ async function fetchAlertsHistory() {
         } else {
             console.error(`Error fetching alerts history!`, response.status, response.statusText);
         }
-    } catch(error) {
-        console.error(`Error fetching alerts history!`, error);
-    }
+    } catch {}
     alerts.sort((a, b) => new Date(a.alertDate) - new Date(b.alertDate));
     return alerts;
 }
