@@ -7,7 +7,7 @@
   "type": "module",
   "main": "server.js",
   "scripts": {
-    "start": "node --disable-warning=DEP0040 server.js"
+    "start": "node server.js"
   },
   "dependencies": {
     "dotenv": "17.3.1",
