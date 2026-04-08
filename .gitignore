@@ -1,5 +1,4 @@
 .env
 .history/
 .idea/
-alert-keys.json
 node_modules/
